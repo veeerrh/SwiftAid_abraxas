@@ -292,7 +292,7 @@ function DraftCard({ draft, onChange, onSubmit, onCancel, busy, donorName }: { d
       bodyClassName="space-y-4 p-4"
       actions={
         <Badge tone={tone}>
-          {draft.source === "ai" ? "Claude" : draft.source === "fallback" ? "Rules parser" : "Placeholder"} · {Math.round(draft.confidence * 100)}%
+          {draft.source === "ai" ? "AI vision" : draft.source === "fallback" ? "Rules parser" : "Placeholder"} · {Math.round(draft.confidence * 100)}%
         </Badge>
       }
     >

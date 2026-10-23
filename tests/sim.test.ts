@@ -36,8 +36,6 @@ function run(s: SimState, minutes: number, step = 0.25, each?: (s: SimState) => 
   }
 }
 
-const delivered = (s: SimState, batchId: string) => s.batches.find((b) => b.id === batchId)!.deliveredQty;
-
 describe("scenario A — 180-meal banquet", () => {
   it("splits across riders and shelters, delivers safely, never spoils", () => {
     const s = createInitialState();

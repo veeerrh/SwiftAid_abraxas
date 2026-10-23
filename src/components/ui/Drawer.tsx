@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export function Drawer({
@@ -20,6 +20,13 @@ export function Drawer({
   width?: number;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -34,7 +41,7 @@ export function Drawer({
           />
           <motion.aside
             key="panel"
-            className={cn("glass fixed inset-y-3 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl shadow-[var(--shadow)]")}
+            role="dialog" aria-label={title} className={cn("glass fixed inset-y-3 right-3 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl shadow-[var(--shadow)]")}
             style={{ width }}
             initial={{ x: width + 40, opacity: 0.6 }}
             animate={{ x: 0, opacity: 1 }}
@@ -50,7 +57,7 @@ export function Drawer({
                 <X className="size-4" />
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
           </motion.aside>
         </>
       )}

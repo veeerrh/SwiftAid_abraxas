@@ -1,9 +1,10 @@
 "use client";
 
-import { Atom } from "lucide-react";
+import { Atom, Bot } from "lucide-react";
 import { useState } from "react";
 import { BatchRail } from "@/components/admin/BatchRail";
 import { ChaosPanel } from "@/components/admin/ChaosPanel";
+import { Copilot } from "@/components/admin/Copilot";
 import { EventFeed } from "@/components/admin/EventFeed";
 import { KpiStrip } from "@/components/admin/KpiStrip";
 import { OptimizerLab } from "@/components/admin/OptimizerLab";
@@ -21,6 +22,7 @@ export default function AdminPage() {
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [focusRider, setFocusRider] = useState<string | null>(null);
   const [lab, setLab] = useState(false);
+  const [copilot, setCopilot] = useState(false);
 
   const onSelect = (s: MapSelection) => {
     if (!snap) return;
@@ -50,9 +52,14 @@ export default function AdminPage() {
           <div className="pointer-events-auto lg:col-span-3">
             <TopBar
               right={
-                <Button size="sm" variant="ai" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
-                  Optimizer Lab
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ai" icon={<Bot className="size-3.5" />} onClick={() => setCopilot(true)}>
+                    Copilot
+                  </Button>
+                  <Button size="sm" variant="ai" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
+                    Optimizer Lab
+                  </Button>
+                </div>
               }
             />
           </div>
@@ -77,6 +84,9 @@ export default function AdminPage() {
         </div>
       )}
 
+      <Drawer open={copilot} onClose={() => setCopilot(false)} title="Dispatcher Copilot" icon={<Bot className="size-4 text-ai" />} width={520}>
+        <Copilot />
+      </Drawer>
       {snap && (
         <Drawer open={lab} onClose={() => setLab(false)} title="Optimizer Lab · QIGA / QPSO" icon={<Atom className="size-4 text-ai" />} width={600}>
           <OptimizerLab snap={snap} />
