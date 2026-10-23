@@ -1,4 +1,5 @@
 import type { MarketState } from "./market";
+import type { FailureSpec } from "../market/studio-presets";
 
 /** Core domain model. All times are simulation minutes since scenario start. */
 
@@ -258,4 +259,6 @@ export interface SimState {
   market: MarketState;
   /** Run all four optimizers on every plan (for the Optimizer Lab). Default true. */
   labCompare?: boolean;
+  /** Demo Studio: the scenario in play and its scheduled failures. */
+  studio?: { name: string; startedAt: number; failures: (FailureSpec & { fired: boolean })[] };
 }

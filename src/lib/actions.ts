@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { applyKnobs, buildWorldFromSpec, fireFailure } from "@/lib/market/studio";
+import { failureSchema, scenarioSchema } from "@/lib/market/studio-presets";
 import { CATEGORY_META } from "@/lib/domain/rules";
 import type { Store } from "@/lib/store";
 import {
@@ -140,6 +142,19 @@ export const actionSchema = z.discriminatedUnion("type", [
     capacity: z.number().int().min(5).max(2000),
   }),
   z.object({ type: z.literal("registerRider"), name: z.string().min(1).max(60), area: z.string().max(60), lat: z.number().min(18.3).max(18.7), lng: z.number().min(73.6).max(74.1) }),
+  z.object({ type: z.literal("studioLoad"), spec: scenarioSchema }),
+  z.object({ type: z.literal("studioFail"), failure: failureSchema }),
+  z.object({
+    type: z.literal("studioKnob"),
+    expiryFactor: z.number().min(0.1).max(1).optional(),
+    traffic: z.number().min(1).max(5).optional(),
+    riderReliability: z.number().min(0.3).max(0.99).optional(),
+    donorResponseRate: z.number().min(0).max(1).optional(),
+    shelterRejectRate: z.number().min(0).max(1).optional(),
+    autopilot: z.boolean().optional(),
+    ridersOffline: z.number().int().min(0).max(20).optional(),
+    ridersOnline: z.boolean().optional(),
+  }),
   z.object({
     type: z.literal("setMarketConfig"),
     autopilot: z.boolean().optional(),
@@ -347,6 +362,21 @@ export function dispatchAction(store: Store, raw: unknown): ActionResult {
     case "registerRider": {
       const r = store.mutate((st) => registerRider(st, { name: a.name, area: a.area, loc: { lat: a.lat, lng: a.lng } }));
       return r.ok ? { ok: true, info: { id: r.value.id } } : fail(r.error);
+    }
+    case "studioLoad": {
+      store.load(buildWorldFromSpec(a.spec));
+      store.mutate(() => 0);
+      return { ok: true };
+    }
+    case "studioFail": {
+      const msg = store.mutate((st) => fireFailure(st, a.failure));
+      return { ok: true, info: { message: msg } };
+    }
+    case "studioKnob": {
+      const { type: _t, ...k } = a;
+      void _t;
+      const done = store.mutate((st) => applyKnobs(st, k));
+      return { ok: true, info: { applied: done } };
     }
     case "setMarketConfig":
       return store.mutate((st) => {

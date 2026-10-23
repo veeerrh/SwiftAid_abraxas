@@ -103,6 +103,13 @@ export class Store {
     this.emit();
   }
 
+  /** Replace the whole world (Demo Studio scenarios). Keeps the chosen algorithm. */
+  load(next: SimState) {
+    next.algo = this.state.algo;
+    this.state = next;
+    this.emit();
+  }
+
   /** Run a mutation against the state, flush any queued planning and notify listeners. */
   mutate<T>(fn: (s: SimState) => T): T {
     const out = fn(this.state);
