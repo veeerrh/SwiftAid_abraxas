@@ -106,6 +106,7 @@ export function LiveMap({
     let fitted = false;
     let raf = 0;
     let lastFrame = 0;
+    let lastFit = 0;
     let dead = false;
 
     const ensureLayers = () => {
@@ -196,7 +197,7 @@ export function LiveMap({
       for (const d of snap.donors) {
         if (p.onlyBatchId) {
           const b = snap.batches.find((x) => x.id === p.onlyBatchId);
-          if (b && b.donorId !== d.id) {
+          if (!b || b.donorId !== d.id) {
             donors.get(d.id)?.remove();
             donors.delete(d.id);
             continue;
@@ -215,7 +216,7 @@ export function LiveMap({
       }
 
       for (const s of snap.shelters) {
-        if (p.onlyShelterId && s.id !== p.onlyShelterId && !demand.has(s.id)) {
+        if (p.onlyShelterId && s.id !== p.onlyShelterId) {
           shelters.get(s.id)?.remove();
           shelters.delete(s.id);
           continue;
@@ -310,6 +311,8 @@ export function LiveMap({
 
       for (const leg of legsByRider.values()) {
         if (p.onlyBatchId && leg.batchId !== p.onlyBatchId) continue;
+        if (p.onlyRiderId && leg.riderId !== p.onlyRiderId) continue;
+        if (p.onlyShelterId && leg.shelterId !== p.onlyShelterId) continue;
         const rider = snap.riders.find((x) => x.id === leg.riderId)!;
         const shelter = snap.shelters.find((s) => s.id === leg.shelterId)!;
         const tone = rider.silent ? "crit" : survivalTone(leg.survival?.p ?? 1);
@@ -350,6 +353,17 @@ export function LiveMap({
         (map.getSource("routes-next") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: nextFeats });
       }
 
+      const focusMode = !!(p.onlyBatchId || p.onlyRiderId || p.onlyShelterId);
+      if (focusMode && ts - lastFit > 2500) {
+        lastFit = ts;
+        const b = new maplibregl.LngLatBounds();
+        let n = 0;
+        for (const m of [...donors.values(), ...shelters.values(), ...riders.values()]) {
+          b.extend(m.getLngLat());
+          n++;
+        }
+        if (n > 0) map.fitBounds(b, { padding: 60, maxZoom: 14, duration: 900 });
+      }
       if (!fitted && snap.shelters.length) {
         fitted = true;
         const b = new maplibregl.LngLatBounds();
