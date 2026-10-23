@@ -188,6 +188,9 @@ export function LiveMap({
 
     function syncStatic(snap: Snapshot) {
       const p = propsRef.current;
+      const batchLegs = p.onlyBatchId ? snap.legs.filter((l) => l.batchId === p.onlyBatchId && l.state !== "released") : null;
+      const batchRiders = batchLegs ? new Set(batchLegs.map((l) => l.riderId)) : null;
+      const batchShelters = batchLegs ? new Set(batchLegs.map((l) => l.shelterId)) : null;
       const demand = new Map<string, number>();
       for (const l of snap.legs) {
         if (l.state === "delivered" || l.state === "released" || l.state === "failed") continue;
@@ -216,7 +219,7 @@ export function LiveMap({
       }
 
       for (const s of snap.shelters) {
-        if (p.onlyShelterId && s.id !== p.onlyShelterId) {
+        if ((p.onlyShelterId && s.id !== p.onlyShelterId) || (batchShelters && !batchShelters.has(s.id))) {
           shelters.get(s.id)?.remove();
           shelters.delete(s.id);
           continue;
@@ -250,7 +253,7 @@ export function LiveMap({
 
       const standbyIds = new Set(snap.legs.flatMap((l) => (l.standbyRiderId ? [l.standbyRiderId] : [])));
       for (const r of snap.riders) {
-        if (p.onlyRiderId && r.id !== p.onlyRiderId) {
+        if ((p.onlyRiderId && r.id !== p.onlyRiderId) || (batchRiders && !p.onlyRiderId && !batchRiders.has(r.id))) {
           riders.get(r.id)?.remove();
           riders.delete(r.id);
           continue;
