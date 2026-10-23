@@ -24,6 +24,17 @@ export interface Feasibility {
   totalMin: number;
 }
 
+/** Riders already holding cargo (divert candidates) may only deliver that cargo. */
+const carrierCache = new WeakMap<Problem, Set<string>>();
+function carriersOf(problem: Problem): Set<string> {
+  let set = carrierCache.get(problem);
+  if (!set) {
+    set = new Set(problem.cargos.flatMap((c) => (c.carrierRiderId ? [c.carrierRiderId] : [])));
+    carrierCache.set(problem, set);
+  }
+  return set;
+}
+
 export function legTimes(problem: Problem, cargo: Cargo, rider: PoolRider, shelter: PoolShelter) {
   const holds = cargo.carrierRiderId === rider.id;
   const pickupMin = holds
@@ -48,6 +59,9 @@ export function checkFeasible(
 
   if (cargo.carrierRiderId && cargo.carrierRiderId !== rider.id) {
     return fail("CARRIER_MISMATCH", "Cargo is already on another rider");
+  }
+  if (!cargo.carrierRiderId && carriersOf(problem).has(rider.id)) {
+    return fail("CARRIER_MISMATCH", "Rider is already carrying other cargo");
   }
   if (rider.capacity <= 0) return fail("NO_CAPACITY", "Rider has no carrying capacity");
 

@@ -162,6 +162,20 @@ describe("mid-journey demand changes", () => {
     void b;
   });
 
+  it("a diverting rider is never also handed a second cargo (no double-booking)", () => {
+    const s = createInitialState();
+    spawnScenario(s, "banquet");
+    let guard = 0;
+    while (inDropPhase(s).length === 0 && guard++ < 400) tick(s, 0.25);
+    const leg = inDropPhase(s)[0];
+    // Invalidate the destination and post a new donation inside the same planning pass.
+    s.shelters.find((x) => x.id === leg.shelterId)!.open = false;
+    addBatch(s, { donorId: "D5", category: "kit", qty: 30, safeMin: 120 });
+    const perRider = new Map<string, number>();
+    for (const l of activeLegs(s)) perRider.set(l.riderId, (perRider.get(l.riderId) ?? 0) + 1);
+    expect(Math.max(...perRider.values())).toBe(1);
+  });
+
   it("diverts when a citizen fills the shelter (demand closes while rider is mid-route)", () => {
     const s = createInitialState();
     const b = spawnScenario(s, "banquet");
