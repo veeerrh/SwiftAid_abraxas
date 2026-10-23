@@ -35,7 +35,8 @@ function toResult(name: AlgoName, r: { plan: Plan; score: ReturnType<typeof scor
  * requested one. The baseline greedy plan seeds the search and acts as a floor: whatever is
  * applied is never worse than greedy.
  */
-export function solve(problem: Problem, algo: AlgoName, seed: number): SolveOutput {
+export function solve(problem: Problem, algo: AlgoName, seed: number, opts: { compareAll?: boolean } = {}): SolveOutput {
+  const compareAll = opts.compareAll !== false;
   const t0 = performance.now();
   const gPlan = greedyPlan(problem);
   const gScore = scorePlan(problem, gPlan);
@@ -49,28 +50,33 @@ export function solve(problem: Problem, algo: AlgoName, seed: number): SolveOutp
   };
 
   const searchable = problem.cargos.length > 0 && problem.riders.length > 0 && problem.shelters.length > 0;
-  if (searchable) {
+  if (searchable && (compareAll || algo !== "greedy")) {
     const base = genomeFromPlan(problem, gPlan);
+    const want = (n: AlgoName) => compareAll || algo === n || (n === "qiga" && algo === "hybrid");
 
-    const qiga: OptResult = runQIGA(problem, makeRng(seed ^ 0x9e3779b1), base);
-    const qpso: OptResult = runQPSO(problem, makeRng(seed ^ 0x85ebca6b), base, { mode: "full" });
+    const qiga: OptResult | null = want("qiga") ? runQIGA(problem, makeRng(seed ^ 0x9e3779b1), base) : null;
+    const qpso: OptResult | null = want("qpso") ? runQPSO(problem, makeRng(seed ^ 0x85ebca6b), base, { mode: "full" }) : null;
 
     // Hybrid: QIGA's discrete topology refined by QPSO over loads and priorities.
-    const refineStart = performance.now();
-    const refined = runQPSO(problem, makeRng(seed ^ 0xc2b2ae35), qiga.genome, { mode: "refine", iters: 40 });
-    const hybrid: OptResult = {
-      ...refined,
-      convergence: [...qiga.convergence, ...refined.convergence],
-      diversity: [...qiga.diversity, ...refined.diversity],
-      ms: qiga.ms + (performance.now() - refineStart),
-    };
+    let hybrid: OptResult | null = null;
+    if (qiga && (compareAll || algo === "hybrid")) {
+      const refineStart = performance.now();
+      const refined = runQPSO(problem, makeRng(seed ^ 0xc2b2ae35), qiga.genome, { mode: "refine", iters: 40 });
+      hybrid = {
+        ...refined,
+        convergence: [...qiga.convergence, ...refined.convergence],
+        diversity: [...qiga.diversity, ...refined.diversity],
+        ms: qiga.ms + (performance.now() - refineStart),
+      };
+    }
 
     for (const [name, r] of [["qiga", qiga], ["qpso", qpso], ["hybrid", hybrid]] as const) {
+      if (!r) continue;
       results.push(toResult(name, r));
       // Never worse than baseline.
       plans[name] = r.score.fitness >= gScore.fitness ? { plan: r.plan, fitness: r.score.fitness } : { plan: gPlan, fitness: gScore.fitness };
     }
-  } else {
+  } else if (compareAll) {
     for (const name of ["qiga", "qpso", "hybrid"] as const) results.push(toResult(name, { ...greedy, ms: 0 }));
   }
 

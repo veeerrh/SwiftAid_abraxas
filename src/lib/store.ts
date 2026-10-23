@@ -124,6 +124,7 @@ export class Store {
       events: s.events.slice(-150),
       metrics: s.metrics,
       optimizerRuns: runs,
+      market: { ...s.market, notifications: s.market.notifications.slice(-120) },
     };
   }
 }

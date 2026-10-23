@@ -13,6 +13,8 @@ export interface Cargo {
   chunk: number;
   /** When set only this rider may deliver the cargo (they already hold it). */
   carrierRiderId?: string;
+  /** Marketplace cargo is bound to the shelter the order names. */
+  allowedShelterIds?: string[];
 }
 
 export interface PoolRider {
@@ -21,6 +23,8 @@ export interface PoolRider {
   capacity: number;
   speedKmh: number;
   reliability: number;
+  /** false = no insulated box. Undefined counts as equipped. */
+  coldGear?: boolean;
 }
 
 export interface PoolShelter {

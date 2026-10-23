@@ -22,6 +22,7 @@ import {
   type PoolShelter,
   type Problem,
 } from "./problem";
+import { hooks } from "./hooks";
 import { solve } from "./solver";
 import { validatePlan } from "./validator";
 
@@ -87,7 +88,7 @@ function standbyRiderIds(state: SimState): Set<string> {
 }
 
 function poolRider(r: Rider): PoolRider {
-  return { id: r.id, loc: r.loc, capacity: r.capacity, speedKmh: r.speedKmh, reliability: r.reliability };
+  return { id: r.id, loc: r.loc, capacity: r.capacity, speedKmh: r.speedKmh, reliability: r.reliability, coldGear: r.coldGear };
 }
 
 export function buildProblem(
@@ -99,15 +100,18 @@ export function buildProblem(
   for (const b of state.batches) {
     if (opts.onlyBatchId && b.id !== opts.onlyBatchId) continue;
     if (b.unplacedQty <= 0 || state.clock >= b.expiresAt) continue;
+    // Marketplace batches wait on the job board until a rider (or auto-pilot) claims them.
+    if (b.orderId && b.dispatch !== "auto") continue;
     const donor = donorOf(state, b.donorId);
     const recov = b.recovery ?? [];
     const recSum = recov.reduce((n, r) => n + r.qty, 0);
     const base = {
       batchId: b.id,
       category: b.category,
-      expiresAt: b.expiresAt,
+      expiresAt: b.plannedDeadline ?? b.expiresAt,
       coldChain: b.coldChain,
       chunk: CATEGORY_META[b.category].chunk,
+      allowedShelterIds: b.allowedShelterIds,
     };
     const atDonor = b.unplacedQty - recSum;
     if (atDonor > 0) cargos.push({ ...base, id: `${b.id}:d`, qty: atDonor, loc: donor.loc });
@@ -129,7 +133,7 @@ export function buildProblem(
       category: b.category,
       qty: leg.qty,
       loc: rider.loc,
-      expiresAt: b.expiresAt,
+      expiresAt: b.plannedDeadline ?? b.expiresAt,
       coldChain: b.coldChain,
       chunk: leg.qty,
       carrierRiderId: rider.id,
@@ -142,6 +146,7 @@ export function buildProblem(
     .filter((r) => {
       if (opts.onlyRiders && !opts.onlyRiders.includes(r.id)) return false;
       if (carriers.has(r.id)) return true;
+      if (r.manual && state.market.config.boardOnlyForManual) return false;
       if (r.status !== "idle" || r.silent) return false;
       if (r.cooldownUntil !== undefined && state.clock < r.cooldownUntil) return false;
       if (standby.has(r.id)) return false;
@@ -225,14 +230,14 @@ export function findInvalidLegs(state: SimState): { leg: Leg; reason: string }[]
       continue;
     }
     claimed.set(shelter.id, used);
-    if (leg.dropEta > batch.expiresAt - 0.5 && !leg.note?.startsWith("late")) {
+    if (leg.dropEta > (batch.plannedDeadline ?? batch.expiresAt) - 0.5 && !leg.note?.startsWith("late")) {
       out.push({ leg, reason: `ETA now beyond the safe window for ${batch.label}` });
     }
   }
   return out;
 }
 
-function refreshSurvival(state: SimState, leg: Leg) {
+export function refreshSurvival(state: SimState, leg: Leg) {
   const batch = batchOf(state, leg.batchId);
   const rider = riderOf(state, leg.riderId);
   leg.survival = monteCarlo({
@@ -272,7 +277,7 @@ function assignStandby(state: SimState, problem: Problem, leg: Leg, taken: Set<s
   }
 }
 
-function makeLeg(state: SimState, cargo: Cargo, a: ReturnType<typeof buildAssignment>): Leg {
+export function makeLeg(state: SimState, cargo: Cargo, a: ReturnType<typeof buildAssignment>): Leg {
   const batch = batchOf(state, cargo.batchId);
   const rider = riderOf(state, a.riderId);
   const shelter = shelterOf(state, a.shelterId);
@@ -295,6 +300,7 @@ function makeLeg(state: SimState, cargo: Cargo, a: ReturnType<typeof buildAssign
     phaseStart: state.clock,
     phaseDuration: a.pickupMin,
     dropEta: state.clock + a.totalMin,
+    orderId: batch.orderId,
   };
   rider.status = "busy";
   return leg;
@@ -322,7 +328,7 @@ export function replan(state: SimState, reason: string, opts: { onlyRiders?: str
   const { problem, divertLegs: divertMap } = built;
   if (problem.cargos.length === 0) return;
 
-  const out = solve(problem, state.algo, state.seed + state.nextId);
+  const out = solve(problem, state.algo, state.seed + state.nextId, { compareAll: state.labCompare !== false });
   let plan: Plan = out.plan;
   const v = validatePlan(problem, plan);
   if (!v.ok) {
@@ -461,6 +467,7 @@ function applyPlan(
             `${rider.name} is stranded with ${leg.qty} ${batchOf(state, leg.batchId).unit}: no safe shelter is reachable in time (${explainBlocked(state, problem, cargo)}). Suggest returning to donor cold-hold.`,
             { riderId: rider.id, batchId: leg.batchId },
           );
+          hooks.legStranded?.(state, leg, explainBlocked(state, problem, cargo));
         }
       }
       continue;
@@ -511,6 +518,7 @@ export function releaseLeg(
     batch.recovery = [...(batch.recovery ?? []), { loc: { ...rider.loc }, qty: leg.qty }];
   }
   if (opts.ghost) batch.ghostSince = rider.lastHeartbeat;
+  if (batch.orderId && opts.ghost && state.market.config.autopilot) batch.dispatch = "auto";
 
   rider.status = rider.silent ? "ghosting" : "idle";
   if (!opts.noCooldown) rider.cooldownUntil = state.clock + (opts.ghost ? 999 : 3);
@@ -526,6 +534,8 @@ export function releaseLeg(
       { riderId: rider.id, batchId: batch.id, shelterId: leg.shelterId },
     );
   }
+
+  if (!opts.quiet) hooks.legReleased?.(state, leg, reason, opts.ghost);
 
   // Hot standby gets first refusal, before the general replan.
   if (leg.standbyRiderId && opts.ghost) {
@@ -615,6 +625,10 @@ export function addBatch(
 
 export function refreshStatuses(state: SimState) {
   for (const b of state.batches) {
+    if (b.cancelled) {
+      b.status = "cancelled";
+      continue;
+    }
     const legs = state.legs.filter((l) => l.batchId === b.id && isActive(l));
     const inflight = legs.reduce((n, l) => n + l.qty, 0);
     if (inflight === 0 && b.unplacedQty <= 0) {
@@ -710,6 +724,8 @@ export function tick(state: SimState, dtMin: number) {
     advance(state, leg, rider);
   }
 
+  hooks.tick?.(state, dtMin);
+
   // Destinations that went bad.
   const invalid = findInvalidLegs(state);
   if (invalid.length > 0) {
@@ -739,6 +755,10 @@ export function tick(state: SimState, dtMin: number) {
   flushReplan(state);
 }
 
+export function advanceLeg(state: SimState, leg: Leg, rider: Rider) {
+  advance(state, leg, rider);
+}
+
 function advance(state: SimState, leg: Leg, rider: Rider) {
   for (let guard = 0; guard < 4; guard++) {
     if (!MOVING_STATES.includes(leg.state)) return;
@@ -748,6 +768,7 @@ function advance(state: SimState, leg: Leg, rider: Rider) {
     if (state.clock < end) return;
 
     if (leg.phase === "pickup") {
+      if (hooks.pickupGate && !hooks.pickupGate(state, leg, rider)) return;
       const batch = batchOf(state, leg.batchId);
       const shelter = shelterOf(state, leg.shelterId);
       leg.phase = "drop";
@@ -783,6 +804,7 @@ function tryDeliver(state: SimState, leg: Leg, rider: Rider): boolean {
     requestReplan(state, compat.ok ? `${shelter.name} no longer has room` : compat.reason!);
     return false;
   }
+  if (hooks.dropGate && !hooks.dropGate(state, leg, rider)) return false;
   shelter.capacityRemaining -= leg.qty;
   batch.deliveredQty += leg.qty;
   state.metrics.delivered += leg.qty;

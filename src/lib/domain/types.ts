@@ -1,3 +1,5 @@
+import type { MarketState } from "./market";
+
 /** Core domain model. All times are simulation minutes since scenario start. */
 
 export type Category = "cooked" | "raw_ration" | "medical" | "infant_formula" | "kit";
@@ -7,11 +9,23 @@ export interface LatLng {
   lng: number;
 }
 
-export interface Donor {
+/** Behaviour shared by organisations that answer automatically unless a person is present. */
+export interface OrgBehaviour {
+  /** Responds on its own (confirmations, handovers) when no human is present. */
+  auto?: boolean;
+  /** Sim minute a person last pinged from this organisation's portal. */
+  humanSeenAt?: number;
+}
+
+export interface Donor extends OrgBehaviour {
   id: string;
   name: string;
   area: string;
   loc: LatLng;
+  /** Probability an auto donor ever answers a reservation (demo knob for ghost confirmations). */
+  responseRate?: number;
+  /** Minutes an auto donor needs before handing over after a rider arrives. */
+  prepDelayMin?: number;
 }
 
 export interface Facilities {
@@ -20,7 +34,7 @@ export interface Facilities {
   coldStorage: boolean;
 }
 
-export interface Shelter {
+export interface Shelter extends OrgBehaviour {
   id: string;
   name: string;
   area: string;
@@ -31,6 +45,10 @@ export interface Shelter {
   accepts: Category[];
   facilities: Facilities;
   open: boolean;
+  /** Probability an auto shelter ever answers the receipt prompt. */
+  receiptRate?: number;
+  /** Probability an auto shelter rejects a delivery on quality grounds. */
+  rejectRate?: number;
 }
 
 export type RiderStatus = "idle" | "busy" | "ghosting" | "offline";
@@ -55,6 +73,10 @@ export interface Rider {
   manual: boolean;
   /** Declined or timed-out riders are skipped by the planner until this sim minute. */
   cooldownUntil?: number;
+  /** Carries an insulated box: required for cold-chain supplies. */
+  coldGear?: boolean;
+  /** Sim minute a person last pinged from the rider app. */
+  humanSeenAt?: number;
 }
 
 export type BatchStatus =
@@ -64,7 +86,8 @@ export type BatchStatus =
   | "delivered"
   | "partial"
   | "at_risk"
-  | "spoiled";
+  | "spoiled"
+  | "cancelled";
 
 export interface Batch {
   id: string;
@@ -90,6 +113,16 @@ export interface Batch {
   ghostSince?: number;
   /** Planner already reported why this batch can't be dispatched (avoids log spam). */
   blockedLogged?: boolean;
+  /** Marketplace: the order this batch fulfils. */
+  orderId?: string;
+  /** The order was cancelled before everything was collected. */
+  cancelled?: boolean;
+  /** Buffered deadline riders plan against (expiresAt stays the true expiry). */
+  plannedDeadline?: number;
+  /** "board": waits for a rider to claim it; "auto": the planner may assign auto-pilot riders. */
+  dispatch?: "board" | "auto";
+  /** Marketplace batches may only go to these shelters. */
+  allowedShelterIds?: string[];
 }
 
 export type LegState =
@@ -141,6 +174,12 @@ export interface Leg {
   dropEta: number;
   standbyRiderId?: string;
   survival?: SurvivalEstimate;
+  /** Marketplace: order this leg serves, and its handover progress. */
+  orderId?: string;
+  pickupConfirmed?: boolean;
+  /** Set when the rider is waiting at the shelter for the receipt decision. */
+  receipt?: "pending" | "accepted" | "rejected";
+  handoverSince?: number;
   divertedFrom?: string;
   divertedAt?: number;
   releasedReason?: string;
@@ -188,6 +227,8 @@ export interface Metrics {
   ghostRecoveries: number;
   diverts: number;
   blockedDispatches: number;
+  /** Units a shelter rejected at the door. */
+  rejected: number;
   /** Sum / count of ghost detection → reassignment minutes. */
   responseMinSum: number;
   responseCount: number;
@@ -214,4 +255,7 @@ export interface SimState {
   /** Reasons queued for the next planner pass. */
   replanReasons: string[];
   lastReplanAt: number;
+  market: MarketState;
+  /** Run all four optimizers on every plan (for the Optimizer Lab). Default true. */
+  labCompare?: boolean;
 }

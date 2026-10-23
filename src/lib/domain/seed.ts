@@ -1,5 +1,6 @@
 import type { Batch, Donor, Metrics, Rider, Shelter, SimState } from "./types";
 import { CATEGORY_META } from "./rules";
+import { emptyMarket } from "./market";
 
 /**
  * Demo data: simulated organisations placed at real Pune neighbourhoods.
@@ -96,19 +97,20 @@ interface RiderSeed {
   vehicle: Rider["vehicle"];
   capacity: number;
   reliability: number;
+  coldGear: boolean;
 }
 
 const RIDER_SEEDS: RiderSeed[] = [
-  { id: "R1", name: "Aarav", area: "Shivajinagar", lat: 18.5308, lng: 73.8475, vehicle: "scooter", capacity: 40, reliability: 0.95 },
-  { id: "R2", name: "Isha", area: "Swargate", lat: 18.5018, lng: 73.8636, vehicle: "scooter", capacity: 40, reliability: 0.9 },
-  { id: "R3", name: "Rohan", area: "Baner", lat: 18.559, lng: 73.7868, vehicle: "scooter", capacity: 40, reliability: 0.82 },
-  { id: "R4", name: "Meera", area: "Kalyani Nagar", lat: 18.5463, lng: 73.9033, vehicle: "scooter", capacity: 40, reliability: 0.93 },
-  { id: "R5", name: "Kabir", area: "Katraj", lat: 18.4575, lng: 73.8677, vehicle: "bike", capacity: 25, reliability: 0.74 },
-  { id: "R6", name: "Sana", area: "Kondhwa", lat: 18.4701, lng: 73.8987, vehicle: "scooter", capacity: 40, reliability: 0.9 },
-  { id: "R7", name: "Dev", area: "Deccan", lat: 18.519, lng: 73.842, vehicle: "scooter", capacity: 40, reliability: 0.97 },
-  { id: "R8", name: "Tara", area: "Kothrud", lat: 18.51, lng: 73.81, vehicle: "scooter", capacity: 40, reliability: 0.88 },
-  { id: "R9", name: "Nikhil", area: "Hadapsar", lat: 18.5, lng: 73.92, vehicle: "van", capacity: 60, reliability: 0.8 },
-  { id: "R10", name: "Zoya", area: "Camp", lat: 18.516, lng: 73.878, vehicle: "scooter", capacity: 40, reliability: 0.92 },
+  { id: "R1", name: "Aarav", area: "Shivajinagar", lat: 18.5308, lng: 73.8475, vehicle: "scooter", capacity: 40, reliability: 0.95, coldGear: true },
+  { id: "R2", name: "Isha", area: "Swargate", lat: 18.5018, lng: 73.8636, vehicle: "scooter", capacity: 40, reliability: 0.9, coldGear: false },
+  { id: "R3", name: "Rohan", area: "Baner", lat: 18.559, lng: 73.7868, vehicle: "scooter", capacity: 40, reliability: 0.82, coldGear: false },
+  { id: "R4", name: "Meera", area: "Kalyani Nagar", lat: 18.5463, lng: 73.9033, vehicle: "scooter", capacity: 40, reliability: 0.93, coldGear: true },
+  { id: "R5", name: "Kabir", area: "Katraj", lat: 18.4575, lng: 73.8677, vehicle: "bike", capacity: 25, reliability: 0.74, coldGear: false },
+  { id: "R6", name: "Sana", area: "Kondhwa", lat: 18.4701, lng: 73.8987, vehicle: "scooter", capacity: 40, reliability: 0.9, coldGear: false },
+  { id: "R7", name: "Dev", area: "Deccan", lat: 18.519, lng: 73.842, vehicle: "scooter", capacity: 40, reliability: 0.97, coldGear: true },
+  { id: "R8", name: "Tara", area: "Kothrud", lat: 18.51, lng: 73.81, vehicle: "scooter", capacity: 40, reliability: 0.88, coldGear: false },
+  { id: "R9", name: "Nikhil", area: "Hadapsar", lat: 18.5, lng: 73.92, vehicle: "van", capacity: 60, reliability: 0.8, coldGear: true },
+  { id: "R10", name: "Zoya", area: "Camp", lat: 18.516, lng: 73.878, vehicle: "scooter", capacity: 40, reliability: 0.92, coldGear: true },
 ];
 
 export function makeRiders(): Rider[] {
@@ -126,6 +128,7 @@ export function makeRiders(): Rider[] {
     lastHeartbeat: 0,
     silent: false,
     manual: false,
+    coldGear: r.coldGear,
   }));
 }
 
@@ -136,6 +139,7 @@ export function emptyMetrics(): Metrics {
     ghostRecoveries: 0,
     diverts: 0,
     blockedDispatches: 0,
+    rejected: 0,
     responseMinSum: 0,
     responseCount: 0,
     series: [],
@@ -196,5 +200,6 @@ export function createInitialState(opts: { seed?: number } = {}): SimState {
     seed: opts.seed ?? 20260423,
     replanReasons: [],
     lastReplanAt: -10,
+    market: emptyMarket(),
   };
 }

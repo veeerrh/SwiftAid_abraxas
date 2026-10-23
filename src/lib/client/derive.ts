@@ -51,6 +51,7 @@ export const STATUS_LABEL: Record<Batch["status"], string> = {
   partial: "Partly delivered",
   at_risk: "At risk",
   spoiled: "Spoiled",
+  cancelled: "Cancelled",
 };
 
 export const STATUS_TONE: Record<Batch["status"], "safe" | "warn" | "crit" | "info" | "neutral"> = {
@@ -61,4 +62,5 @@ export const STATUS_TONE: Record<Batch["status"], "safe" | "warn" | "crit" | "in
   partial: "warn",
   at_risk: "crit",
   spoiled: "crit",
+  cancelled: "neutral",
 };

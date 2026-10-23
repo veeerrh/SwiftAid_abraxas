@@ -13,7 +13,7 @@ import {
   type Problem,
 } from "./problem";
 
-export type InfeasibleCode = IncompatCode | "CARRIER_MISMATCH" | "NO_CAPACITY" | "TOO_LATE" | "NO_SPACE";
+export type InfeasibleCode = IncompatCode | "CARRIER_MISMATCH" | "NO_CAPACITY" | "TOO_LATE" | "NO_SPACE" | "WRONG_SHELTER" | "NO_COLD_GEAR";
 
 export interface Feasibility {
   ok: boolean;
@@ -64,6 +64,12 @@ export function checkFeasible(
     return fail("CARRIER_MISMATCH", "Rider is already carrying other cargo");
   }
   if (rider.capacity <= 0) return fail("NO_CAPACITY", "Rider has no carrying capacity");
+  if (cargo.allowedShelterIds && !cargo.allowedShelterIds.includes(shelter.shelter.id)) {
+    return fail("WRONG_SHELTER", "This order is bound to a different shelter");
+  }
+  if (cargo.coldChain && rider.coldGear === false) {
+    return fail("NO_COLD_GEAR", "Cold-chain supplies need a rider with an insulated box");
+  }
 
   const compat = checkCompatibility(cargo.category, shelter.shelter, { coldChain: cargo.coldChain });
   if (!compat.ok) return fail(compat.code!, compat.reason!);
