@@ -1,10 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { geminiJson, geminiConfigured } from "@/lib/ai/gemini";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { dispatchAction } from "@/lib/actions";
 import {
   COPILOT_SYSTEM,
-  COPILOT_TOOL,
   describeAction,
   explainOffline,
   simulateDiff,
@@ -17,8 +16,6 @@ import { getStore } from "@/lib/store";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 30;
-
-const MODEL = process.env.SWIFTAID_MODEL ?? "claude-sonnet-5-5";
 
 const body = z.union([
   z.object({ message: z.string().min(1).max(500), history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(800) })).max(8).optional() }),
@@ -51,30 +48,20 @@ export async function POST(req: Request) {
   let proposed: unknown[] = [];
   let source: "ai" | "rules" = "rules";
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (key) {
-    try {
-      const client = new Anthropic({ apiKey: key, timeout: 20_000, maxRetries: 0 });
-      const res = await client.messages.create({
-        model: MODEL,
-        max_tokens: 600,
-        system: `${COPILOT_SYSTEM}\n\nCURRENT STATE\n${stateBrief(store.state)}`,
-        tools: [COPILOT_TOOL],
-        tool_choice: { type: "tool", name: COPILOT_TOOL.name },
-        messages: [
-          ...(history ?? []).map((h) => ({ role: h.role, content: h.text })),
-          { role: "user" as const, content: message },
-        ],
-      });
-      const tool = res.content.find((b) => b.type === "tool_use");
-      if (tool && tool.type === "tool_use") {
-        const input = tool.input as { reply?: string; actions?: unknown[] };
-        reply = String(input.reply ?? "");
-        proposed = Array.isArray(input.actions) ? input.actions : [];
-        source = "ai";
-      }
-    } catch {
-      /* fall through to rules */
+  if (geminiConfigured()) {
+    const hist = (history ?? []).map((h) => `${h.role === "user" ? "Dispatcher" : "Copilot"}: ${h.text}`).join("\n");
+    const r = await geminiJson<{ reply: string; actions: unknown[] }>({
+      system: `${COPILOT_SYSTEM}\n\nReturn ONLY JSON: {"reply": string, "actions": array}. Each action is an object with "type" in [setShelterOpen, setShelterRemaining, setShelterFacility, citizenDrop, chaosGhost, chaosUnghost, chaosTraffic, setAlgo, replan] plus its fields (shelterId, riderId, open, remaining, key, value, amount, algo, factor, durationMin). Questions get a reply and an empty actions array.\n\nCURRENT STATE\n${stateBrief(store.state)}`,
+      parts: [{ text: `${hist ? `${hist}\n` : ""}Dispatcher: ${message}` }],
+      validate: (raw) => {
+        const o = raw as { reply?: unknown; actions?: unknown };
+        return typeof o?.reply === "string" ? { reply: o.reply, actions: Array.isArray(o.actions) ? o.actions : [] } : null;
+      },
+    });
+    if (r.ok && r.data) {
+      reply = r.data.reply;
+      proposed = r.data.actions;
+      source = "ai";
     }
   }
   if (source === "rules") {

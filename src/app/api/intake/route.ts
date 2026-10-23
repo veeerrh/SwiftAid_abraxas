@@ -1,11 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { fallbackParse, INTAKE_SYSTEM, INTAKE_TOOL, sanitizeDraft, type Draft } from "@/lib/intake";
+import { geminiJson, imageHash, geminiConfigured, type Part } from "@/lib/ai/gemini";
+import { fallbackParse, INTAKE_SYSTEM, draftSchema, sanitizeDraft, type Draft } from "@/lib/intake";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 40;
 
 const body = z.object({
   text: z.string().max(2000).optional(),
@@ -13,12 +13,12 @@ const body = z.object({
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]).optional(),
 });
 
-const MODEL = process.env.SWIFTAID_MODEL ?? "claude-sonnet-5-5";
+const PROMPT = `Return ONLY a JSON object with exactly these keys:
+category ("cooked" | "raw_ration" | "medical" | "infant_formula" | "kit"), qty (integer), label (short title), safeMin (integer minutes the supplies stay safe, 5-1440; read any expiry or best-before shown, otherwise be conservative), coldChain (boolean), riskFlags (array of up to 6 short strings about visible hygiene/safety issues), confidence (0-1), rationale (1-2 sentences saying what you saw and assumed).`;
 
 /**
- * Turns a photo and/or description into a draft donation.
- * The model only proposes; the donor reviews it and the engine re-validates everything.
- * Without an API key (or on any failure) a deterministic parser takes over so intake never breaks.
+ * Photo and/or description → draft donation. The model only proposes; the donor reviews it and the
+ * engine re-validates. Without a key (or on failure) a deterministic parser takes over.
  */
 export async function POST(req: Request) {
   let parsed: z.infer<typeof body>;
@@ -28,52 +28,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
   const text = (parsed.text ?? "").trim();
-  if (!text && !parsed.imageBase64) {
-    return NextResponse.json({ ok: false, error: "Add a description or a photo" }, { status: 400 });
-  }
+  if (!text && !parsed.imageBase64) return NextResponse.json({ ok: false, error: "Add a description or a photo" }, { status: 400 });
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (key) {
-    try {
-      const client = new Anthropic({ apiKey: key, timeout: 20_000, maxRetries: 0 });
-      const content: Anthropic.Messages.ContentBlockParam[] = [];
-      if (parsed.imageBase64) {
-        content.push({
-          type: "image",
-          source: { type: "base64", media_type: parsed.mediaType ?? "image/jpeg", data: parsed.imageBase64 },
-        });
-      }
-      content.push({
-        type: "text",
-        text: text
-          ? `Donor description: "${text}"\n\nRecord this donation.`
-          : "No description was given. Record the donation shown in the photo.",
-      });
-      const res = await client.messages.create({
-        model: MODEL,
-        max_tokens: 700,
-        system: INTAKE_SYSTEM,
-        tools: [INTAKE_TOOL],
-        tool_choice: { type: "tool", name: INTAKE_TOOL.name },
-        messages: [{ role: "user", content }],
-      });
-      const tool = res.content.find((b) => b.type === "tool_use");
-      const draft = tool && tool.type === "tool_use" ? sanitizeDraft(tool.input, "ai") : null;
-      if (draft) return NextResponse.json({ ok: true, draft });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "unknown error";
-      return NextResponse.json({ ok: true, draft: offline(text, !!parsed.imageBase64, `AI unavailable (${msg.slice(0, 80)})`) });
-    }
+  if (geminiConfigured()) {
+    const parts: Part[] = [];
+    if (parsed.imageBase64) parts.push({ inlineData: { mimeType: parsed.mediaType ?? "image/jpeg", data: parsed.imageBase64 } });
+    parts.push({ text: `${text ? `Donor description: "${text}"` : "No description was given; use the photo."}\n\n${PROMPT}` });
+    const r = await geminiJson<Draft>({
+      system: INTAKE_SYSTEM,
+      parts,
+      cacheKey: `intake:${text}:${parsed.imageBase64 ? imageHash(parsed.imageBase64) : ""}`,
+      validate: (raw) => {
+        const ok = draftSchema.safeParse(raw);
+        return ok.success ? sanitizeDraft(ok.data, "ai", undefined) : null;
+      },
+    });
+    if (r.ok && r.data) return NextResponse.json({ ok: true, draft: { ...r.data, note: r.cached ? "Cached result" : undefined }, model: r.model });
+    return NextResponse.json({ ok: true, draft: offline(text, !!parsed.imageBase64, `AI unavailable (${(r.error ?? "").slice(0, 80)}); used the built-in parser`) });
   }
-  return NextResponse.json({
-    ok: true,
-    draft: offline(text, !!parsed.imageBase64, key ? "AI returned an unreadable answer" : "Offline mode: set ANTHROPIC_API_KEY to enable photo understanding"),
-  });
+  return NextResponse.json({ ok: true, draft: offline(text, !!parsed.imageBase64, "Offline mode: add GEMINI_API_KEY to enable photo understanding") });
 }
 
 function offline(text: string, hadImage: boolean, note: string): Draft {
   if (text) return { ...fallbackParse(text), note };
-  // Photo only, and no model available: nothing was actually read from the image.
   return {
     category: "cooked",
     qty: 20,
@@ -82,7 +59,7 @@ function offline(text: string, hadImage: boolean, note: string): Draft {
     coldChain: false,
     riskFlags: ["photo not analysed: please confirm every field"],
     confidence: 0.2,
-    rationale: hadImage ? "The photo could not be analysed offline, so these are placeholder values for you to correct." : "No details provided.",
+    rationale: hadImage ? "The photo could not be analysed, so these are placeholder values for you to correct." : "No details provided.",
     source: "offline-estimate",
     note,
   };
