@@ -121,6 +121,18 @@ check("posting creates and dispatches the batch", r.ok);
 await donor.getByText(/journey of your donation/i).waitFor({ timeout: 8000 });
 check("donor sees the journey tracker", true);
 
+// --- Responsive: no horizontal overflow on a phone-sized viewport
+const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+for (const path of ["/", "/admin", "/donor", "/rider", "/shelter", "/impact", "/live"]) {
+  const pg = await mobile.newPage();
+  await pg.goto(BASE + path, { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(2200);
+  const over = await pg.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check(`${path} has no horizontal overflow at 390px`, over <= 1, `overflow=${over}px`);
+  await pg.close();
+}
+await mobile.close();
+
 // --- Guided demo drives real failures
 await post({ type: "reset", scenario: "quiet" });
 const guide = await ctx.newPage();

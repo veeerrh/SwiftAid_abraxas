@@ -70,7 +70,7 @@ pnpm test        # 100 unit/property tests (vitest)
 pnpm typecheck
 pnpm lint
 pnpm dev &       # then, in another shell:
-pnpm e2e         # 41 Playwright checks across every portal
+pnpm e2e         # 48 Playwright checks across every portal
 ```
 
 - Domain, feasibility, greedy, validator and optimizers: unit tests, including property-style fuzzing of the genome decoder.

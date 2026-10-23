@@ -120,7 +120,7 @@ export default function RiderPage() {
           </section>
 
           {/* Phone */}
-          <div className="relative mx-auto h-[min(800px,calc(100dvh-120px))] min-h-[640px] w-[390px] max-w-full overflow-hidden rounded-[44px] border-[9px] border-[color:var(--line-strong)] bg-bg shadow-[var(--shadow)]">
+          <div className="relative mx-auto h-[min(800px,calc(100dvh-120px))] min-h-[640px] w-full max-w-[390px] overflow-hidden rounded-[44px] border-[9px] border-[color:var(--line-strong)] bg-bg shadow-[var(--shadow)]">
             <div className="absolute left-1/2 top-2 z-30 h-5 w-24 -translate-x-1/2 rounded-full bg-black/80" />
             <div className="flex h-full flex-col pt-9">
               <div className="flex items-center gap-3 px-5 pb-3">

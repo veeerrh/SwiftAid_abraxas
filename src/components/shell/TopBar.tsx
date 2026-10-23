@@ -17,14 +17,14 @@ const NAV = [
   { href: "/live", label: "Live board" },
 ];
 
-export function Brand({ compact }: { compact?: boolean }) {
+export function Brand({ compact, forceText }: { compact?: boolean; forceText?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5">
       <span className="grid size-9 place-items-center rounded-xl bg-safe-soft text-safe shadow-[var(--glow-safe)]">
         <HeartHandshake className="size-5" />
       </span>
       {!compact && (
-        <span className="hidden leading-none sm:block">
+        <span className={cn("leading-none", forceText ? "block" : "hidden sm:block")}>
           <span className="block text-[15px] font-semibold tracking-tight">SwiftAid</span>
           <span className="block text-[10px] uppercase tracking-[0.16em] text-faint">Last-mile dispatch</span>
         </span>

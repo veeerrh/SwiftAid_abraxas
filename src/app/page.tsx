@@ -30,7 +30,7 @@ export default function Landing() {
 
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-6xl flex-col px-5 py-5 sm:px-8">
         <header className="flex items-center justify-between">
-          <Brand />
+          <Brand forceText />
           <div className="flex items-center gap-4">
             <ConnectionDot />
             <ThemeToggle />

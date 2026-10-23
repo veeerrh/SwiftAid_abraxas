@@ -13,7 +13,7 @@ export default function JudgePage() {
   return (
     <main className="flex h-dvh flex-col gap-3 bg-bg p-3">
       <div className="glass flex items-center justify-between rounded-xl px-4 py-2">
-        <Brand />
+        <Brand forceText />
         <div className="flex items-center gap-4 text-xs text-dim">
           <span className="hidden sm:inline">Judge mode: every portal shares one live city. Break something in the control room and watch each role react.</span>
           <Link href="/" className="rounded-lg bg-surface2 px-3 py-1.5 font-medium text-ink hover:bg-surface3">

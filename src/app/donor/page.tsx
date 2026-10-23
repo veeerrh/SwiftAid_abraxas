@@ -166,7 +166,7 @@ export default function DonorPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Panel title="New donation" icon={<Sparkles className="size-3.5 text-ai" />} bodyClassName="space-y-4 p-4">
               <div className="relative">
                 <textarea
@@ -247,7 +247,7 @@ export default function DonorPage() {
             </AnimatePresence>
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Panel title="Your donations" icon={<PackageCheck className="size-3.5" />} actions={<span className="tabular text-[11px] text-faint">{mine.length}</span>} bodyClassName="p-3">
               {mine.length === 0 ? (
                 <div className="grid place-items-center py-14 text-center text-sm text-dim">
