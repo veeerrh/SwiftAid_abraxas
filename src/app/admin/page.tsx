@@ -1,6 +1,6 @@
 "use client";
 
-import { Atom, Bot, Route } from "lucide-react";
+import { Atom, Bot, Route, Store } from "lucide-react";
 import { useState } from "react";
 import { BatchRail } from "@/components/admin/BatchRail";
 import { ChaosPanel } from "@/components/admin/ChaosPanel";
@@ -8,6 +8,7 @@ import { DemoGuide } from "@/components/admin/DemoGuide";
 import { Copilot } from "@/components/admin/Copilot";
 import { EventFeed } from "@/components/admin/EventFeed";
 import { KpiStrip } from "@/components/admin/KpiStrip";
+import { MarketPanel } from "@/components/admin/MarketPanel";
 import { OptimizerLab } from "@/components/admin/OptimizerLab";
 import { ResourceRail } from "@/components/admin/ResourceRail";
 import { Timeline } from "@/components/admin/Timeline";
@@ -25,6 +26,7 @@ export default function AdminPage() {
   const [lab, setLab] = useState(false);
   const [copilot, setCopilot] = useState(false);
   const [guide, setGuide] = useState(false);
+  const [market, setMarket] = useState(false);
 
   const onSelect = (s: MapSelection) => {
     if (!snap) return;
@@ -55,6 +57,9 @@ export default function AdminPage() {
             <TopBar
               right={
                 <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" aria-label="Marketplace" icon={<Store className="size-3.5" />} onClick={() => setMarket(true)}>
+                    <span className="hidden md:inline">Marketplace</span>
+                  </Button>
                   <Button size="sm" variant="ghost" aria-label="Guided demo" icon={<Route className="size-3.5" />} onClick={() => setGuide(true)}>
                     <span className="hidden md:inline">Demo</span>
                   </Button>
@@ -89,6 +94,11 @@ export default function AdminPage() {
         </div>
       )}
 
+      {snap && (
+        <Drawer open={market} onClose={() => setMarket(false)} title="Marketplace" icon={<Store className="size-4 text-safe" />} width={560}>
+          <MarketPanel snap={snap} />
+        </Drawer>
+      )}
       {snap && (
         <Drawer open={guide} onClose={() => setGuide(false)} title="Guided demo" icon={<Route className="size-4 text-safe" />} width={460}>
           <DemoGuide snap={snap} openCopilot={() => { setGuide(false); setCopilot(true); }} openLab={() => { setGuide(false); setLab(true); }} />

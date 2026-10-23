@@ -47,6 +47,14 @@ export default function RiderPage() {
 
   const rider = snap ? riderOf(snap, riderId) : undefined;
 
+  // A person is using this rider app: marks the rider as human-controlled and alive.
+  useEffect(() => {
+    const ping = () => void act({ type: "presence", role: "rider", id: riderId });
+    ping();
+    const t = setInterval(ping, 1500);
+    return () => clearInterval(t);
+  }, [riderId]);
+
   // Heartbeats keep a human-controlled rider's leases alive.
   useEffect(() => {
     if (!rider?.manual || rider.silent) return;
@@ -195,6 +203,9 @@ export default function RiderPage() {
                     )
                   )}
                 </AnimatePresence>
+
+                {!leg && !rider.silent && <TripBoard trips={snap.board[riderId] ?? []} riderId={riderId} now={now} donorName={(d) => donorOf(snap, d)?.name ?? d} shelterName={(sh) => shelterOf(snap, sh)?.name ?? sh} />}
+                {leg?.orderId && <HandoverBox leg={leg} orderId={leg.orderId} />}
 
                 {!rider.silent && (
                   <button
@@ -345,6 +356,85 @@ function Row({ icon, k, v }: { icon: React.ReactNode; k: string; v: React.ReactN
         {k}
       </span>
       <span className="truncate text-right font-medium">{v}</span>
+    </div>
+  );
+}
+
+function TripBoard({ trips, riderId, now, donorName, shelterName }: { trips: import("@/lib/market/engine").TripOffer[]; riderId: string; now: number; donorName: (d: string) => string; shelterName: (s: string) => string }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.14em] text-faint">
+        <span>Trips you can finish in time</span>
+        <span className="tabular">{trips.length}</span>
+      </div>
+      {trips.length === 0 && (
+        <div className="rounded-2xl border border-line bg-surface2 p-5 text-center">
+          <Radio className="mx-auto size-6 text-safe" style={{ animation: "drift 3s ease-in-out infinite" }} />
+          <div className="mt-2 text-sm font-semibold">No trips right now</div>
+          <p className="mt-1 text-xs leading-relaxed text-dim">Trips only appear if you can reach the donor and deliver before the supplies expire, with a safety buffer.</p>
+        </div>
+      )}
+      {trips.map((t) => (
+        <div key={t.orderId} className="glass rounded-2xl p-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">
+                {t.qty} {t.unit} · {t.label}
+              </div>
+              <div className="truncate text-[11px] text-dim">
+                {donorName(t.donorId)} → {shelterName(t.shelterId)}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              {t.priority !== "normal" && <Badge tone={t.priority === "critical" ? "crit" : "warn"}>{t.priority}</Badge>}
+              {t.urgency > 0 && <Badge tone="warn">urgent</Badge>}
+            </div>
+          </div>
+          <div className="tabular mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
+            <div className="rounded-lg bg-surface2 py-1.5">
+              <div className="text-sm font-semibold">{Math.round(t.rideMin)}m</div>
+              <div className="text-faint">to donor</div>
+            </div>
+            <div className="rounded-lg bg-surface2 py-1.5">
+              <div className="text-sm font-semibold">{Math.round(t.legMin)}m</div>
+              <div className="text-faint">donor to shelter</div>
+            </div>
+            <div className="rounded-lg bg-surface2 py-1.5">
+              <div className="text-sm font-semibold">{Math.max(0, Math.round(t.bufferedDeadline - now))}m</div>
+              <div className="text-faint">safe window</div>
+            </div>
+          </div>
+          {t.coldChain && <div className="mt-1.5 text-[11px] text-info">Cold chain: keep in your insulated box</div>}
+          {t.remainingQty > t.qty && <div className="mt-1 text-[11px] text-dim">Part of a larger order ({t.remainingQty} still to collect)</div>}
+          <Button size="sm" variant="primary" className="mt-2.5 w-full" onClick={async () => { const r = await act({ type: "acceptTrip", riderId, orderId: t.orderId }); if (!r.ok) toast(r.error ?? "Trip is no longer available", "crit"); }}>
+            Claim this trip
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HandoverBox({ leg, orderId }: { leg: import("@/lib/domain/types").Leg; orderId: string }) {
+  const [code, setCode] = useState("");
+  const atPickup = leg.state === "to_pickup" && leg.handoverSince !== undefined && !leg.pickupConfirmed;
+  const atDrop = leg.receipt === "pending";
+  if (!atPickup && !atDrop) return null;
+  const submit = async () => {
+    const r = atPickup ? await act({ type: "confirmPickup", orderId, by: "rider", code }) : await act({ type: "confirmReceipt", orderId, accept: true, by: "rider", code });
+    if (!r.ok) toast(r.error ?? "Code not accepted", "crit");
+    else setCode("");
+  };
+  return (
+    <div className="rounded-2xl border border-ai/40 bg-ai-soft p-3.5">
+      <div className="text-xs font-semibold text-ai">{atPickup ? "Waiting for the donor to hand over" : "Waiting for the shelter to confirm receipt"}</div>
+      <p className="mt-1 text-[11px] leading-snug text-dim">{atPickup ? "Ask the donor for their 4-digit handover code, or wait for them to confirm." : "Ask the shelter for their 4-digit receipt code, or wait for them to accept."}</p>
+      <div className="mt-2 flex gap-2">
+        <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" placeholder="0000" className="tabular h-9 w-24 rounded-lg border border-line-strong bg-solid text-center font-mono text-sm outline-none focus:border-ai" />
+        <Button size="sm" variant="ai" disabled={code.length !== 4} onClick={submit}>
+          Confirm code
+        </Button>
+      </div>
     </div>
   );
 }

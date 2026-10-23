@@ -1,5 +1,7 @@
 # SwiftAid
 
+> **v2 in progress.** The marketplace flow (donors list supplies with expiry, shelters request and choose donors with AI-recommended bundles, riders claim only trips they can finish in time) is live. See `docs/SPEC-v2.md` and `docs/PHASES-v2.md` for what is done and what remains.
+
 **Aid that arrives before it spoils.** A real-time coordination, dispatch and safety-enforcement platform that connects
 donors, volunteer riders and receiving shelters, and treats **shelf life, rider capacity, destination rules and human
 unreliability as live variables**.

@@ -46,7 +46,7 @@ const closeAll = async () => { for (const p of ctx.pages()) await p.close(); };
 // Fresh quiet city
 await post({ type: "reset", scenario: "quiet" });
 
-for (const [path, text] of [["/", "before it spoils"], ["/impact", "Impact"], ["/live", "Happening now"], ["/donor", "Donate surplus"], ["/shelter", "Capacity"], ["/rider", "Playing as"], ["/judge", "Judge mode"]]) {
+for (const [path, text] of [["/", "before it spoils"], ["/impact", "Impact"], ["/live", "Happening now"], ["/donor", "List supplies"], ["/shelter", "What do you need"], ["/rider", "Playing as"], ["/judge", "Judge mode"]]) {
   const pg = await visit(path, text);
   await pg.close();
 }
@@ -98,28 +98,39 @@ if (offered) {
   await rider.close();
 }
 
-// --- Shelter portal closes intake
-await post({ type: "reset", scenario: "quiet" });
-const shelter = await ctx.newPage();
-await shelter.goto(`${BASE}/shelter?s=S2`, { waitUntil: "domcontentloaded" });
-await shelter.getByRole("switch", { name: /Accepting deliveries/ }).click({ timeout: 10000 });
-r = await until((x) => x.shelters.find((q) => q.id === "S2").open === false);
-check("shelter portal closes intake", r.ok);
-await shelter.close();
+// --- Marketplace: shelter picks a reachable donor card and confirms; donor confirms; rider claims
+await post({ type: "reset", scenario: "market" });
+const shelterPg = await ctx.newPage();
+await shelterPg.goto(`${BASE}/shelter?s=S2`, { waitUntil: "domcontentloaded" });
+await shelterPg.getByRole("button", { name: "Take all" }).first().click({ timeout: 15000 });
+await shelterPg.getByRole("button", { name: "Confirm order" }).click();
+r = await until((x) => x.market.orders.some((o) => o.shelterId === "S2"));
+check("shelter UI places an order with a reachable donor", r.ok);
+await shelterPg.getByRole("button", { name: /Suggest the best mix/ }).click();
+await shelterPg.getByText(/AI-recommended bundle/i).waitFor({ timeout: 10000 });
+check("shelter UI shows an AI-recommended bundle with reasons", true);
+r = await until((x) => x.market.orders.some((o) => o.shelterId === "S2" && o.status === "awaiting_rider"), 15000);
+check("auto donor confirms the reservation and the trip reaches the board", r.ok);
+await shelterPg.close();
 
-// --- Donor portal: AI intake (offline parser) → post → journey
-await post({ type: "reset", scenario: "quiet" });
-const donor = await ctx.newPage();
-await donor.goto(`${BASE}/donor?d=D1`, { waitUntil: "domcontentloaded" });
-await donor.getByPlaceholder(/180 cooked meals/).fill("60 cooked meals, spoil in 90 minutes");
-await donor.getByRole("button", { name: /Analyze with AI/ }).click();
-await donor.getByText(/review and confirm/i).waitFor({ timeout: 10000 });
-check("donor intake produces an editable AI draft", true);
-await donor.getByRole("button", { name: /^Post from/ }).click();
-r = await until((x) => x.batches.some((b) => b.qty === 60) && x.legs.length > 0);
-check("posting creates and dispatches the batch", r.ok);
-await donor.getByText(/journey of your donation/i).waitFor({ timeout: 8000 });
-check("donor sees the journey tracker", true);
+// --- Donor: lists supplies with an expiry and sees them in the market
+const donorPg = await ctx.newPage();
+await donorPg.goto(`${BASE}/donor?d=D1`, { waitUntil: "domcontentloaded" });
+await donorPg.getByPlaceholder(/Veg biryani trays/).fill("Smoke test trays");
+await donorPg.getByRole("button", { name: "Post listing" }).click({ timeout: 15000 });
+r = await until((x) => x.market.listings.some((l) => l.label === "Smoke test trays"));
+check("donor UI posts a listing with an expiry", r.ok);
+await donorPg.close();
+
+// --- Rider: claims a trip from the board in the phone UI
+await post({ type: "reset", scenario: "market" });
+await post({ type: "presence", role: "rider", id: "R10" });
+const riderPg = await ctx.newPage();
+await riderPg.goto(`${BASE}/rider?r=R10`, { waitUntil: "domcontentloaded" });
+await riderPg.getByRole("button", { name: "Claim this trip" }).first().click({ timeout: 20000 });
+r = await until((x) => x.legs.some((l) => l.riderId === "R10" && l.orderId));
+check("rider claims a trip from the board in the phone UI", r.ok);
+await riderPg.close();
 
 // --- Responsive: no horizontal overflow on a phone-sized viewport
 const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -134,22 +145,24 @@ for (const path of ["/", "/admin", "/donor", "/rider", "/shelter", "/impact", "/
 await mobile.close();
 
 // --- Guided demo drives real failures
-await post({ type: "reset", scenario: "quiet" });
+await post({ type: "reset", scenario: "market" });
+await post({ type: "setRate", rate: 2 });
 const guide = await ctx.newPage();
 await guide.goto(`${BASE}/admin`, { waitUntil: "domcontentloaded" });
 await guide.getByRole("button", { name: "Guided demo" }).click({ timeout: 15000 });
-await guide.getByRole("button", { name: /Post the banquet batch/ }).click();
-r = await until((x) => x.batches.some((b) => b.qty === 180));
-check("guided demo: banquet step posts the batch", r.ok);
+await guide.getByRole("button", { name: /Post the request and order the AI bundle/ }).click();
+r = await until((x) => x.market.orders.filter((o) => o.shelterId === "S2").length >= 2, 15000);
+check("guided demo: AI bundle orders from several donors", r.ok);
 await guide.getByRole("button", { name: /Ghost the busiest rider/ }).click();
 r = await until((x) => x.riders.some((q) => q.silent));
 check("guided demo: ghost step silences a rider", r.ok);
-r = await until((x) => x.metrics.ghostRecoveries > 0, 20000);
+r = await until((x) => x.metrics.ghostRecoveries > 0, 90000);
 check("guided demo: the ghosted batch is recovered", r.ok, `ghostRecoveries=${r.s.metrics.ghostRecoveries}`);
 await guide.getByRole("button", { name: /Run the formula test/ }).click();
 r = await until((x) => x.events.some((e) => e.type === "blocked" && /clean water/i.test(e.text)), 10000);
 check("guided demo: formula is blocked for lack of clean water", r.ok);
 await guide.close();
+await post({ type: "setRate", rate: 0.25 });
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);

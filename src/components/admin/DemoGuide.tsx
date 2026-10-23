@@ -31,17 +31,26 @@ export function DemoGuide({ snap, openCopilot, openLab }: { snap: Snapshot; open
     {
       id: "banquet",
       icon: <Utensils className="size-4" />,
-      title: "180 meals, one scooter carries 40",
-      body: "A banquet hall posts 180 cooked meals that spoil in 75 minutes. Watch it split across riders and shelters; open the batch card for each leg's survival distribution.",
-      button: "Post the banquet batch",
-      run: () => run({ type: "scenario", key: "banquet" }),
-      done: (s) => s.batches.some((b) => b.qty === 180),
+      title: "A shelter needs 190 meals: no single donor has that many",
+      body: "Yerwada posts a large request. The AI (QIGA + QPSO) suggests which donors to combine, the order is placed, donors confirm, and riders pick trips they can finish before expiry.",
+      button: "Post the request and order the AI bundle",
+      run: async () => {
+        const rq = await act({ type: "createRequest", shelterId: "S2", category: "cooked", qty: 190, priority: "high", label: "Cooked meals for flood-displaced families" });
+        if (!rq.ok) return toast(rq.error ?? "Could not post the request", "crit");
+        const res = await fetch("/api/suggest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelterId: "S2", requestId: rq.info?.requestId }) });
+        const data = (await res.json()) as { ok: boolean; suggestion?: { bundles: { lines: { listingId: string; qty: number }[] }[] } };
+        const top = data.suggestion?.bundles[0];
+        if (!top) return toast("No donor can safely reach the shelter right now", "warn");
+        await run({ type: "placeOrder", shelterId: "S2", requestId: rq.info?.requestId as string, lines: top.lines });
+        toast(`Ordered from ${top.lines.length} donors`, "safe");
+      },
+      done: (s) => s.market.orders.some((o) => o.shelterId === "S2" && o.qty > 0 && o.createdAt > 0),
     },
     {
       id: "ghost",
       icon: <Ghost className="size-4" />,
       title: "A volunteer goes silent",
-      body: "The busiest rider stops responding. The heartbeat warning fires, the lease is released, and a rider (or hot standby) takes over before the food spoils.",
+      body: "The busiest rider on a marketplace trip stops responding. The heartbeat warning fires, the lease is released, and a rider (or hot standby) takes over before the food spoils.",
       button: "Ghost the busiest rider",
       run: () => run({ type: "chaosGhost" }),
       done: (s) => s.metrics.ghostRecoveries > 0,
