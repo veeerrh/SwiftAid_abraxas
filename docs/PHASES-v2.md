@@ -5,7 +5,7 @@ Each phase ends with passing tests and a push. See `SPEC-v2.md` for the full spe
 | Phase | Scope | Status |
 | --- | --- | --- |
 | A | Marketplace engine: listings, requests, reachable-zone filter, expiry buffer, confirmations with timeouts, rider job board, handover and receipt, expiry alerts, escalation, preloaded demo data | **Done** (154 tests) |
-| B | Smart donor-bundle suggestions (QIGA/QPSO) | Pending |
+| B | Smart donor-bundle suggestions (QIGA/QPSO) | **Done** (11 tests; beats greedy in ~39% of random cases, avg +1 pt, max +6.7) |
 | C | Logins, role-scoped dashboards, persistence | Pending |
 | D | New donor and shelter screens | Pending |
 | E | Rider mobile app and navigation | Pending |
