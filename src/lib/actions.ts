@@ -19,13 +19,30 @@ import {
   trafficJam,
   unghostRider,
 } from "@/lib/engine/sim";
+import {
+  acceptTrip,
+  cancelListing,
+  cancelOrder,
+  cancelRequest,
+  confirmPickup,
+  confirmReceipt,
+  createListing,
+  createRequest,
+  donorRespond,
+  ping,
+  placeOrder,
+  registerDonor,
+  registerRider,
+  registerShelter,
+  setMarketConfig,
+} from "@/lib/market/engine";
 
 const category = z.enum(["cooked", "raw_ration", "medical", "infant_formula", "kit"]);
 const algo = z.enum(["greedy", "qiga", "qpso", "hybrid"]);
 const scenarioKey = z.enum(["banquet", "formula", "pharmacy", "rush"]);
 
 export const actionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("reset"), scenario: z.enum(["quiet", "banquet", "formula", "pharmacy", "rush"]).optional() }),
+  z.object({ type: z.literal("reset"), scenario: z.enum(["quiet", "banquet", "formula", "pharmacy", "rush", "market"]).optional() }),
   z.object({ type: z.literal("pause") }),
   z.object({ type: z.literal("resume") }),
   z.object({ type: z.literal("setRate"), rate: z.number().min(0.05).max(4) }),
@@ -69,6 +86,69 @@ export const actionSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("chaosTightExpiry") }),
   z.object({ type: z.literal("scenario"), key: scenarioKey }),
+  // Marketplace (v2). Times are minutes from now so clients need no clock maths.
+  z.object({
+    type: z.literal("createListing"),
+    donorId: z.string(),
+    category,
+    label: z.string().min(1).max(120),
+    qty: z.number().int().min(1).max(5000),
+    expiresInMin: z.number().min(1).max(7 * 1440),
+    readyInMin: z.number().min(0).max(1440).optional(),
+    coldChain: z.boolean().optional(),
+    notes: z.string().max(300).optional(),
+    riskFlags: z.array(z.string().max(80)).max(8).optional(),
+  }),
+  z.object({ type: z.literal("cancelListing"), listingId: z.string() }),
+  z.object({
+    type: z.literal("createRequest"),
+    shelterId: z.string(),
+    category,
+    qty: z.number().int().min(1).max(5000),
+    label: z.string().max(120).optional(),
+    neededInMin: z.number().min(1).max(7 * 1440).optional(),
+    priority: z.enum(["normal", "high", "critical"]).optional(),
+    notes: z.string().max(300).optional(),
+  }),
+  z.object({ type: z.literal("cancelRequest"), requestId: z.string() }),
+  z.object({
+    type: z.literal("placeOrder"),
+    shelterId: z.string(),
+    requestId: z.string().nullable().optional(),
+    lines: z.array(z.object({ listingId: z.string(), qty: z.number().int().min(1) })).min(1).max(12),
+  }),
+  z.object({ type: z.literal("donorRespond"), orderId: z.string(), accept: z.boolean(), reason: z.string().max(200).optional() }),
+  z.object({ type: z.literal("acceptTrip"), riderId: z.string(), orderId: z.string(), force: z.boolean().optional() }),
+  z.object({ type: z.literal("confirmPickup"), orderId: z.string(), by: z.enum(["donor", "rider", "admin"]), code: z.string().max(8).optional() }),
+  z.object({
+    type: z.literal("confirmReceipt"),
+    orderId: z.string(),
+    accept: z.boolean(),
+    by: z.enum(["shelter", "rider", "admin"]),
+    code: z.string().max(8).optional(),
+    reason: z.string().max(200).optional(),
+  }),
+  z.object({ type: z.literal("cancelOrder"), orderId: z.string(), by: z.enum(["shelter", "donor", "admin"]), reason: z.string().max(200).optional() }),
+  z.object({ type: z.literal("presence"), role: z.enum(["donor", "shelter", "rider"]), id: z.string() }),
+  z.object({ type: z.literal("registerDonor"), name: z.string().min(1).max(80), area: z.string().max(60), lat: z.number().min(18.3).max(18.7), lng: z.number().min(73.6).max(74.1) }),
+  z.object({
+    type: z.literal("registerShelter"),
+    name: z.string().min(1).max(80),
+    area: z.string().max(60),
+    lat: z.number().min(18.3).max(18.7),
+    lng: z.number().min(73.6).max(74.1),
+    capacity: z.number().int().min(5).max(2000),
+  }),
+  z.object({ type: z.literal("registerRider"), name: z.string().min(1).max(60), area: z.string().max(60), lat: z.number().min(18.3).max(18.7), lng: z.number().min(73.6).max(74.1) }),
+  z.object({
+    type: z.literal("setMarketConfig"),
+    autopilot: z.boolean().optional(),
+    boardGraceMin: z.number().optional(),
+    holdMin: z.number().optional(),
+    maxRideToDonorMin: z.number().optional(),
+    urgentAfterMin: z.number().optional(),
+    escalateAfterMin: z.number().optional(),
+  }),
 ]);
 
 export type Action = z.infer<typeof actionSchema>;
@@ -93,7 +173,7 @@ export function dispatchAction(store: Store, raw: unknown): ActionResult {
 
   switch (a.type) {
     case "reset":
-      store.reset(a.scenario ?? "rush");
+      store.reset(a.scenario ?? "market");
       return { ok: true };
     case "pause":
       store.running = false;
@@ -209,6 +289,72 @@ export function dispatchAction(store: Store, raw: unknown): ActionResult {
       const b = store.mutate((st) => tightExpiryBatch(st));
       return { ok: true, info: { batchId: b.id } };
     }
+    case "createListing": {
+      const r = store.mutate((st) =>
+        createListing(st, { donorId: a.donorId, category: a.category, label: a.label, qty: a.qty, expiresAt: st.clock + a.expiresInMin, readyAt: st.clock + (a.readyInMin ?? 0), coldChain: a.coldChain, notes: a.notes, riskFlags: a.riskFlags }),
+      );
+      return r.ok ? { ok: true, info: { listingId: r.value.id } } : fail(r.error);
+    }
+    case "cancelListing": {
+      const r = store.mutate((st) => cancelListing(st, a.listingId));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "createRequest": {
+      const r = store.mutate((st) =>
+        createRequest(st, { shelterId: a.shelterId, category: a.category, label: a.label, qty: a.qty, neededBy: a.neededInMin != null ? st.clock + a.neededInMin : null, priority: a.priority, notes: a.notes }),
+      );
+      return r.ok ? { ok: true, info: { requestId: r.value.id } } : fail(r.error);
+    }
+    case "cancelRequest": {
+      const r = store.mutate((st) => cancelRequest(st, a.requestId));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "placeOrder": {
+      const r = store.mutate((st) => placeOrder(st, a.shelterId, a.lines, a.requestId ?? undefined));
+      return r.ok ? { ok: true, info: { orderIds: r.value.map((o) => o.id) } } : fail(r.error);
+    }
+    case "donorRespond": {
+      const r = store.mutate((st) => donorRespond(st, a.orderId, a.accept, a.reason));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "acceptTrip": {
+      const r = store.mutate((st) => acceptTrip(st, a.riderId, a.orderId, { force: a.force }));
+      return r.ok ? { ok: true, info: { legId: r.value.id } } : fail(r.error);
+    }
+    case "confirmPickup": {
+      const r = store.mutate((st) => confirmPickup(st, a.orderId, a.by, a.code));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "confirmReceipt": {
+      const r = store.mutate((st) => confirmReceipt(st, a.orderId, a.accept, a.by, { code: a.code, reason: a.reason }));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "cancelOrder": {
+      const r = store.mutate((st) => cancelOrder(st, a.orderId, a.by, a.reason?.trim() || "Cancelled"));
+      return r.ok ? { ok: true } : fail(r.error);
+    }
+    case "presence":
+      ping(s, a.role, a.id);
+      return { ok: true };
+    case "registerDonor": {
+      const r = store.mutate((st) => registerDonor(st, { name: a.name, area: a.area, loc: { lat: a.lat, lng: a.lng } }));
+      return r.ok ? { ok: true, info: { id: r.value.id } } : fail(r.error);
+    }
+    case "registerShelter": {
+      const r = store.mutate((st) => registerShelter(st, { name: a.name, area: a.area, loc: { lat: a.lat, lng: a.lng }, capacity: a.capacity }));
+      return r.ok ? { ok: true, info: { id: r.value.id } } : fail(r.error);
+    }
+    case "registerRider": {
+      const r = store.mutate((st) => registerRider(st, { name: a.name, area: a.area, loc: { lat: a.lat, lng: a.lng } }));
+      return r.ok ? { ok: true, info: { id: r.value.id } } : fail(r.error);
+    }
+    case "setMarketConfig":
+      return store.mutate((st) => {
+        const { type: _t, ...patch } = a;
+        void _t;
+        setMarketConfig(st, patch);
+        return { ok: true };
+      });
     case "scenario": {
       const b = store.mutate((st) => spawnScenario(st, a.key));
       return { ok: true, info: { batchId: b.id } };

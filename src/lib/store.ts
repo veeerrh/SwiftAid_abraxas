@@ -1,8 +1,28 @@
 import { createInitialState } from "@/lib/domain/seed";
 import type { OptimizerRun, SimState } from "@/lib/domain/types";
 import { flushReplan, isActive, log, spawnScenario, tick, type ScenarioKey } from "@/lib/engine/sim";
+import { boardFor, type TripOffer } from "@/lib/market/engine";
+import { reachability } from "@/lib/market/rules";
+import { applyMarketWorldConfig, seedMarket } from "@/lib/market/seed";
 
-export type Snapshot = Omit<SimState, "replanReasons" | "nextId" | "seed" | "lastReplanAt"> & {
+/** Per-shelter view of every listing: can it reach this shelter in time, and with how much spare time. */
+export interface ZoneEntry {
+  listingId: string;
+  ok: boolean;
+  reason?: string;
+  km: number;
+  driveMin: number;
+  slackMin: number;
+  arrivalP90: number;
+  freshnessLeftMin: number;
+  hasNearbyRider: boolean;
+}
+
+export type Snapshot = Omit<SimState, "replanReasons" | "nextId" | "seed" | "lastReplanAt" | "labCompare"> & {
+  /** Job board for each human-controlled rider. */
+  board: Record<string, TripOffer[]>;
+  /** Reachable-zone view for each shelter. */
+  zones: Record<string, ZoneEntry[]>;
   version: number;
   rate: number;
   running: boolean;
@@ -17,7 +37,7 @@ export const DEFAULT_RATE = 0.25;
 export const TICK_MS = 500;
 const MAX_STEP_MIN = 0.25;
 
-export type BootScenario = ScenarioKey | "quiet";
+export type BootScenario = ScenarioKey | "quiet" | "market";
 
 export class Store {
   state: SimState;
@@ -36,7 +56,11 @@ export class Store {
 
   private boot(scenario: BootScenario) {
     log(this.state, "info", "boot", "SwiftAid control room online — Pune network simulation");
-    if (scenario !== "quiet") spawnScenario(this.state, scenario);
+    if (scenario === "market") {
+      applyMarketWorldConfig(this.state);
+      this.state.scenario = "Pune marketplace";
+      seedMarket(this.state, { withMovingOrders: true });
+    } else if (scenario !== "quiet") spawnScenario(this.state, scenario);
   }
 
   start() {
@@ -71,7 +95,7 @@ export class Store {
     this.emit();
   }
 
-  reset(scenario: BootScenario = "rush") {
+  reset(scenario: BootScenario = "market") {
     const keepAlgo = this.state.algo;
     this.state = createInitialState();
     this.state.algo = keepAlgo;
@@ -106,7 +130,20 @@ export class Store {
     const runs: OptimizerRun[] = s.optimizerRuns.slice(-6).map((r, i, arr) =>
       i === arr.length - 1 ? r : { ...r, results: r.results.map((x) => ({ ...x, convergence: [], diversity: [] })) },
     );
+    const board: Record<string, TripOffer[]> = {};
+    for (const r of s.riders) if (r.manual) board[r.id] = boardFor(s, r.id);
+    const zones: Record<string, ZoneEntry[]> = {};
+    for (const sh of s.shelters) {
+      zones[sh.id] = s.market.listings
+        .filter((l) => l.status === "available")
+        .map((l) => {
+          const r = reachability(s, l, sh);
+          return { listingId: l.id, ok: r.ok, reason: r.reason, km: r.km, driveMin: r.driveMin, slackMin: r.slackMin, arrivalP90: r.arrivalP90, freshnessLeftMin: r.freshnessLeftMin, hasNearbyRider: r.hasNearbyRider };
+        });
+    }
     return {
+      board,
+      zones,
       version: this.version,
       rate: this.rate,
       running: this.running,
@@ -133,6 +170,6 @@ const g = globalThis as unknown as { __swiftaid?: Store };
 
 /** Process-wide singleton so every route handler and SSE client shares one city. */
 export function getStore(): Store {
-  if (!g.__swiftaid) g.__swiftaid = new Store();
+  if (!g.__swiftaid) g.__swiftaid = new Store({ boot: "market" });
   return g.__swiftaid;
 }
