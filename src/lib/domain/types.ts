@@ -53,6 +53,8 @@ export interface Rider {
   silent: boolean;
   /** Human-controlled from the rider portal: no auto-accept / auto-heartbeat. */
   manual: boolean;
+  /** Declined or timed-out riders are skipped by the planner until this sim minute. */
+  cooldownUntil?: number;
 }
 
 export type BatchStatus =
@@ -82,6 +84,12 @@ export interface Batch {
   notes?: string;
   /** Free-form flags produced by AI intake (e.g. "raw items", "no packaging"). */
   riskFlags?: string[];
+  /** Cargo stranded away from the donor (e.g. a carrier went silent mid-route). */
+  recovery?: { loc: LatLng; qty: number }[];
+  /** Sim minute when a rider on this batch last spoke, set when a ghost leg is released. */
+  ghostSince?: number;
+  /** Planner already reported why this batch can't be dispatched (avoids log spam). */
+  blockedLogged?: boolean;
 }
 
 export type LegState =
@@ -134,6 +142,7 @@ export interface Leg {
   standbyRiderId?: string;
   survival?: SurvivalEstimate;
   divertedFrom?: string;
+  divertedAt?: number;
   releasedReason?: string;
   note?: string;
 }
@@ -202,4 +211,7 @@ export interface SimState {
   optimizerRuns: OptimizerRun[];
   nextId: number;
   seed: number;
+  /** Reasons queued for the next planner pass. */
+  replanReasons: string[];
+  lastReplanAt: number;
 }

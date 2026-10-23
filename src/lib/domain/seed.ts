@@ -194,5 +194,7 @@ export function createInitialState(opts: { seed?: number } = {}): SimState {
     optimizerRuns: [],
     nextId: 1,
     seed: opts.seed ?? 20260423,
+    replanReasons: [],
+    lastReplanAt: -10,
   };
 }
