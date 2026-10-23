@@ -9,7 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predev": "node scripts/copy-maplibre-worker.mjs",
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "postinstall": "node scripts/copy-maplibre-worker.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
@@ -33,6 +36,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.28",
+    "playwright-core": "^1.64.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5"
