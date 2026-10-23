@@ -74,7 +74,7 @@ export function TopBar({ className, right }: { className?: string; right?: React
             key={n.href}
             href={n.href}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+              "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
               path === n.href ? "bg-surface3 text-ink" : "text-dim hover:bg-surface2 hover:text-ink",
             )}
           >
@@ -83,7 +83,7 @@ export function TopBar({ className, right }: { className?: string; right?: React
         ))}
       </nav>
       <div className="ml-auto flex items-center gap-2 sm:gap-4">
-        {snap && <span className="hidden text-xs text-dim xl:block">{snap.scenario}</span>}
+        {snap && <span className="hidden whitespace-nowrap text-xs text-dim 2xl:block">{snap.scenario}</span>}
         <SimClock />
         <ConnectionDot />
         {right}
