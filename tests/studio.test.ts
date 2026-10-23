@@ -48,3 +48,12 @@ describe("Demo Studio", () => {
     expect(dispatchAction(st, { type: "studioLoad", spec: { name: "x", donors: 99 } }).ok).toBe(false);
   });
 });
+
+describe("Demo Studio snapshot", () => {
+  it("exposes the running scenario to the UI", () => {
+    const st = new Store({ autostart: false, boot: "market" });
+    expect(st.snapshot().studio).toBeUndefined();
+    dispatchAction(st, { type: "studioLoad", spec: scenarioSchema.parse(BLANK_SPEC) });
+    expect(st.snapshot().studio?.name).toBe(BLANK_SPEC.name);
+  });
+});

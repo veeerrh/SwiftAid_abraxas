@@ -25,3 +25,9 @@ Verification at this point: 169 unit/property/fuzz tests and 49 browser checks p
 - Seed: `src/lib/market/seed.ts` (preloaded listings, requests and two moving orders).
 - The v1 engine is reused through hooks (`src/lib/engine/hooks.ts`); with no marketplace order involved it behaves exactly as before.
 - Tests: `market-rules`, `market-engine`, `market-fuzz` (random operations from every party, invariants after each step, everything resolves).
+
+## Demo Studio and Intelligence lab
+
+- **Demo Studio** (admin → Studio): restore the standard city, run one of five ready-made scenarios, or design your own (donors, shelters, riders, traffic, reliability, shelf life, response rate, supplies, requests, failure timeline). Describe a situation in words and AI drafts the scenario (offline keyword fallback). While a scenario runs: timeline of scheduled failures, one-click failures, live knobs, saving results and a comparison table. Scenarios save to the browser, and export/import as JSON.
+- **Intelligence lab** (admin → Intelligence): live plan comparison, a benchmark of greedy vs QIGA/QPSO/hybrid over random emergencies, a scale stress test, and the donor-mix benchmark. All numbers are measured by running the solvers.
+- Tests: `tests/studio.test.ts`, `tests/intel.test.ts`, browser check `e2e/studio.mjs`.

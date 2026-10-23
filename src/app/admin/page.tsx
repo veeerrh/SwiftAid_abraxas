@@ -1,6 +1,6 @@
 "use client";
 
-import { Atom, Bot, Route, Store } from "lucide-react";
+import { Atom, Bot, FlaskConical, Route, Store } from "lucide-react";
 import { useState } from "react";
 import { BatchRail } from "@/components/admin/BatchRail";
 import { ChaosPanel } from "@/components/admin/ChaosPanel";
@@ -9,7 +9,8 @@ import { Copilot } from "@/components/admin/Copilot";
 import { EventFeed } from "@/components/admin/EventFeed";
 import { KpiStrip } from "@/components/admin/KpiStrip";
 import { MarketPanel } from "@/components/admin/MarketPanel";
-import { OptimizerLab } from "@/components/admin/OptimizerLab";
+import { IntelLab } from "@/components/admin/IntelLab";
+import { StudioPanel } from "@/components/admin/StudioPanel";
 import { ResourceRail } from "@/components/admin/ResourceRail";
 import { Timeline } from "@/components/admin/Timeline";
 import { LiveMap, type MapSelection } from "@/components/map/LiveMap";
@@ -24,6 +25,7 @@ export default function AdminPage() {
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [focusRider, setFocusRider] = useState<string | null>(null);
   const [lab, setLab] = useState(false);
+  const [studio, setStudio] = useState(false);
   const [copilot, setCopilot] = useState(false);
   const [guide, setGuide] = useState(false);
   const [market, setMarket] = useState(false);
@@ -60,14 +62,17 @@ export default function AdminPage() {
                   <Button size="sm" variant="ghost" aria-label="Marketplace" icon={<Store className="size-3.5" />} onClick={() => setMarket(true)}>
                     <span className="hidden md:inline">Marketplace</span>
                   </Button>
+                  <Button size="sm" variant="ghost" aria-label="Demo Studio" icon={<FlaskConical className="size-3.5" />} onClick={() => setStudio(true)}>
+                    <span className="hidden md:inline">Studio</span>
+                  </Button>
                   <Button size="sm" variant="ghost" aria-label="Guided demo" icon={<Route className="size-3.5" />} onClick={() => setGuide(true)}>
                     <span className="hidden md:inline">Demo</span>
                   </Button>
                   <Button size="sm" variant="ai" aria-label="Copilot" icon={<Bot className="size-3.5" />} onClick={() => setCopilot(true)}>
                     <span className="hidden sm:inline">Copilot</span>
                   </Button>
-                  <Button size="sm" variant="ai" aria-label="Optimizer Lab" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
-                    <span className="hidden sm:inline">Optimizer Lab</span>
+                  <Button size="sm" variant="ai" aria-label="Intelligence lab" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
+                    <span className="hidden sm:inline">Intelligence</span>
                   </Button>
                 </div>
               }
@@ -108,8 +113,13 @@ export default function AdminPage() {
         <Copilot />
       </Drawer>
       {snap && (
-        <Drawer open={lab} onClose={() => setLab(false)} title="Optimizer Lab · QIGA / QPSO" icon={<Atom className="size-4 text-ai" />} width={600}>
-          <OptimizerLab snap={snap} />
+        <Drawer open={lab} onClose={() => setLab(false)} title="Intelligence lab · QIGA / QPSO" icon={<Atom className="size-4 text-ai" />} width={640}>
+          <IntelLab snap={snap} />
+        </Drawer>
+      )}
+      {snap && (
+        <Drawer open={studio} onClose={() => setStudio(false)} title="Demo Studio" icon={<FlaskConical className="size-4 text-ai" />} width={620}>
+          <StudioPanel snap={snap} />
         </Drawer>
       )}
       <Toaster />
