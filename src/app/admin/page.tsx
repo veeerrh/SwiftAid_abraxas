@@ -1,9 +1,10 @@
 "use client";
 
-import { Atom, Bot } from "lucide-react";
+import { Atom, Bot, Route } from "lucide-react";
 import { useState } from "react";
 import { BatchRail } from "@/components/admin/BatchRail";
 import { ChaosPanel } from "@/components/admin/ChaosPanel";
+import { DemoGuide } from "@/components/admin/DemoGuide";
 import { Copilot } from "@/components/admin/Copilot";
 import { EventFeed } from "@/components/admin/EventFeed";
 import { KpiStrip } from "@/components/admin/KpiStrip";
@@ -23,6 +24,7 @@ export default function AdminPage() {
   const [focusRider, setFocusRider] = useState<string | null>(null);
   const [lab, setLab] = useState(false);
   const [copilot, setCopilot] = useState(false);
+  const [guide, setGuide] = useState(false);
 
   const onSelect = (s: MapSelection) => {
     if (!snap) return;
@@ -53,11 +55,14 @@ export default function AdminPage() {
             <TopBar
               right={
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ai" icon={<Bot className="size-3.5" />} onClick={() => setCopilot(true)}>
-                    Copilot
+                  <Button size="sm" variant="ghost" aria-label="Guided demo" icon={<Route className="size-3.5" />} onClick={() => setGuide(true)}>
+                    <span className="hidden md:inline">Demo</span>
                   </Button>
-                  <Button size="sm" variant="ai" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
-                    Optimizer Lab
+                  <Button size="sm" variant="ai" aria-label="Copilot" icon={<Bot className="size-3.5" />} onClick={() => setCopilot(true)}>
+                    <span className="hidden sm:inline">Copilot</span>
+                  </Button>
+                  <Button size="sm" variant="ai" aria-label="Optimizer Lab" icon={<Atom className="size-3.5" />} onClick={() => setLab(true)}>
+                    <span className="hidden sm:inline">Optimizer Lab</span>
                   </Button>
                 </div>
               }
@@ -84,6 +89,11 @@ export default function AdminPage() {
         </div>
       )}
 
+      {snap && (
+        <Drawer open={guide} onClose={() => setGuide(false)} title="Guided demo" icon={<Route className="size-4 text-safe" />} width={460}>
+          <DemoGuide snap={snap} openCopilot={() => { setGuide(false); setCopilot(true); }} openLab={() => { setGuide(false); setLab(true); }} />
+        </Drawer>
+      )}
       <Drawer open={copilot} onClose={() => setCopilot(false)} title="Dispatcher Copilot" icon={<Bot className="size-4 text-ai" />} width={520}>
         <Copilot />
       </Drawer>

@@ -121,6 +121,24 @@ check("posting creates and dispatches the batch", r.ok);
 await donor.getByText(/journey of your donation/i).waitFor({ timeout: 8000 });
 check("donor sees the journey tracker", true);
 
+// --- Guided demo drives real failures
+await post({ type: "reset", scenario: "quiet" });
+const guide = await ctx.newPage();
+await guide.goto(`${BASE}/admin`, { waitUntil: "domcontentloaded" });
+await guide.getByRole("button", { name: "Guided demo" }).click({ timeout: 15000 });
+await guide.getByRole("button", { name: /Post the banquet batch/ }).click();
+r = await until((x) => x.batches.some((b) => b.qty === 180));
+check("guided demo: banquet step posts the batch", r.ok);
+await guide.getByRole("button", { name: /Ghost the busiest rider/ }).click();
+r = await until((x) => x.riders.some((q) => q.silent));
+check("guided demo: ghost step silences a rider", r.ok);
+r = await until((x) => x.metrics.ghostRecoveries > 0, 20000);
+check("guided demo: the ghosted batch is recovered", r.ok, `ghostRecoveries=${r.s.metrics.ghostRecoveries}`);
+await guide.getByRole("button", { name: /Run the formula test/ }).click();
+r = await until((x) => x.events.some((e) => e.type === "blocked" && /clean water/i.test(e.text)), 10000);
+check("guided demo: formula is blocked for lack of clean water", r.ok);
+await guide.close();
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

@@ -24,7 +24,7 @@ export function Brand({ compact }: { compact?: boolean }) {
         <HeartHandshake className="size-5" />
       </span>
       {!compact && (
-        <span className="leading-none">
+        <span className="hidden leading-none sm:block">
           <span className="block text-[15px] font-semibold tracking-tight">SwiftAid</span>
           <span className="block text-[10px] uppercase tracking-[0.16em] text-faint">Last-mile dispatch</span>
         </span>
@@ -45,7 +45,7 @@ export function ConnectionDot() {
   return (
     <span className="flex items-center gap-1.5 text-[11px] font-medium text-dim" title={`Connection: ${m.t}`}>
       <span className={cn("size-2 rounded-full", m.c)} />
-      {m.t}
+      <span className="hidden sm:inline">{m.t}</span>
     </span>
   );
 }
@@ -66,7 +66,7 @@ export function TopBar({ className, right }: { className?: string; right?: React
   const path = usePathname();
   const snap = useLive((s) => s.snap);
   return (
-    <header className={cn("glass flex items-center gap-4 rounded-xl px-4 py-2.5", className)}>
+    <header className={cn("glass flex items-center gap-2 rounded-xl px-3 py-2.5 sm:gap-4 sm:px-4", className)}>
       <Brand />
       <nav className="ml-2 hidden items-center gap-1 lg:flex">
         {NAV.map((n) => (
@@ -82,7 +82,7 @@ export function TopBar({ className, right }: { className?: string; right?: React
           </Link>
         ))}
       </nav>
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex items-center gap-2 sm:gap-4">
         {snap && <span className="hidden text-xs text-dim xl:block">{snap.scenario}</span>}
         <SimClock />
         <ConnectionDot />
